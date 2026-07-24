@@ -240,3 +240,13 @@ docs/figures/cwt_stability/
 docs/reports/**/main.pdf
 
 /.scratch/
+
+# JetBrains IDE settings
+.idea/
+
+# Vendored / externally-managed checkouts, not part of this repo's history.
+# Omni-iEEG has its own upstream git repo (github.com/Omni-iEEG/Omni-iEEG);
+# auditorydecoding is pinned as a git dependency in pyproject.toml/uv.lock
+# and is re-fetchable via `uv sync`.
+/Omni-iEEG/
+/auditorydecoding/
