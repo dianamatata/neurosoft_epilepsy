@@ -22,7 +22,12 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["pre-commit>=4.5.1", "pytest>=8.0.0", "ruff>=0.14.14"]
+dev = [
+    "ipykernel>=7.3.0",
+    "pre-commit>=4.5.1",
+    "pytest>=8.0.0",
+    "ruff>=0.14.14",
+]
 notebook = ["ipykernel>=7.2.0", "seaborn>=0.13.2"]
 
 [tool.uv.sources]
