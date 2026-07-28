@@ -249,4 +249,3 @@ docs/reports/**/main.pdf
 # auditorydecoding is pinned as a git dependency in pyproject.toml/uv.lock
 # and is re-fetchable via `uv sync`.
 /Omni-iEEG/
-/auditorydecoding/
