@@ -130,11 +130,11 @@ What is generic and reusable lives one layer down, in torch_brain itself (a depe
 ```bash
 export UV_CACHE_DIR=/capstor/scratch/cscs/davalos/.cache/uv.
 
-  uv run --frozen brainsets prepare --local pipelines/omni_ieeg --use-active-env \
+  uv run --frozen brainsets prepare -v --local pipelines/omni_ieeg --use-active-env \
       --raw-dir /capstor/scratch/cscs/davalos/data/raw \
       --processed-dir /capstor/scratch/cscs/davalos/data/processed
 
-  uv run --frozen brainsets prepare --local pipelines/neurosoft_nsb-epigrid-v1 --use-active-env \
+  uv run --frozen brainsets prepare -v --local pipelines/neurosoft_nsb-epigrid-v1 --use-active-env \
       --raw-dir /capstor/scratch/cscs/davalos/data/raw \
       --processed-dir /capstor/scratch/cscs/davalos/data/processed
 ```
