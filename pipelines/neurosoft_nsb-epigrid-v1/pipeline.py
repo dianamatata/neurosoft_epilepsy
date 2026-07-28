@@ -56,7 +56,7 @@ _nsp.load_recordings = _load_recordings_tolerant
 
 
 class Pipeline(NeurosoftPipeline):
-    brainset_id = "nsb-epigrid-v1"
+    brainset_id = "neurosoft_nsb-epigrid-v1"
 
     split_config = {
         "test_subjects": {"sub-02"},

@@ -1,3 +1,229 @@
+# Set up
+
+## Ressources
+- Foundry at https://github.com/dianamatata/neurosoft_epilepsy to keep this data structure
+- https://github.com/Neurosoft-Bioelectronics/auditorydecoding.git@alex/monkeys
+- data transfert with globus: https://docs.cscs.ch/storage/transfer/
+- documentation CSCS: https://docs.cscs.ch/storage/filesystems/
+- get Omni iEEG: https://github.com/Omni-iEEG
+
+
+update certificate:
+`cscs-key sign`
+
+
+### Setting up the working environment
+
+```sh
+# Fetch code
+cd /capstor/scratch/cscs/davalos
+git clone --branch feat/omni-ieeg_integration --single-branch https://github.com/dianamatata/neurosoft_epilepsy
+cd neurosoft_epilepsy
+```
+https://docs.cscs.ch/build-install/python/#uenv
+
+1. Start a uenv with a view (prgenv-gnu-openmpi/26.3:v1)
+```sh
+uenv repo create
+uenv image find prgenv-gnu
+uenv image pull prgenv-gnu-openmpi/26.3:v1
+uenv start --view=default prgenv-gnu-openmpi/26.3:v1
+```
+
+2. Set up the environment so Python behaves predictably
+```sh
+unset PYTHONPATH
+export PYTHONUSERBASE="$(dirname "$(dirname "$(which python)")")"
+```
+
+3. Create the venv with uv, pointing at your pyproject.toml's folder
+
+```sh
+uv venv --python $(which python) --system-site-packages --seed --relocatable --link-mode=copy .venv
+source .venv/bin/activate
+```
+
+4. Now sync your actual dependencies from pyproject.toml
+```sh
+uv sync
+uv pip install ipykernel
+```
+
+# add omnieeg
+
+```bash
+git clone https://github.com/Omni-iEEG/Omni-iEEG.git
+cd Omni-iEEG
+uv pip install -e .
+```
+Get the data:
+
+`python omni_ieeg/dataloader/download_dataset.py --output_dir /Users/avalos/Documents/Programming/neurosoft_epilepsy/data/raw_dir
+`
+# copy data
+
+```bash
+cp -r /capstor/store/cscs/swissai/a0091/sdsc/nsb-epigrid-v1 /capstor/scratch/cscs/davalos/data/raw_dir/neurosoft_nsb-epigrid-v1
+
+scp -r davalos@clariden-ln002:/capstor/scratch/cscs/davalos/data/processed/omni_ieeg/sub-openieegDetroit051_ses-01_task-sleep.h5 /Users/avalos/Documents/Programming/neurosoft_epilepsy/data/processed/sub-openieegDetroit051_ses-01_task-sleep.h5 
+```
+#no: Mimic the local setup by symlinking the dataset folder ln -s /mydata/aqvpa/shared/audio data
+
+# Switch branch, Prepare the Python virtual environment, check Pytest
+```bash
+rm uv.lock
+uv sync --locked
+uv run pytest
+```
+
+# add auditorydecoding
+
+
+1. Clone the repository:
+```bash
+git clone https://github.com/Neurosoft-Bioelectronics/auditorydecoding.git
+cd auditorydecoding
+```
+
+2. Install dependencies using uv:
+3. Before processing data, you need to configure the brainsets module. The brainsets configuration file specifies settings for data processing. Initialize and configure brainsets using the interactive command:
+```bash
+uv sync
+uv run brainsets config
+```
+
+This command will prompt you to set the `raw_dir` (location of your BIDS/raw data) and `processed_dir` (location where processed outputs will be stored).
+
+### Processing the Data
+
+Once brainsets is configured, prepare the Neurosoft minipigs 2026 dataset using the following command:
+
+```bash
+uv run brainsets prepare --local pipelines/neurosoft_minipigs_2026  --raw <path to the BIDS data>
+```
+
+This command will:
+- Validate the raw BIDS dataset
+- Process iEEG recordings
+- Extract relevant features and metadata
+- Generate `.h5` files that are ready for model training
+
+## Dataset Structure
+
+The project uses the [BIDS (Brain Imaging Data Structure)](https://bids.neuroimaging.io/) format for organizing neurophysiology data.
+
+
+
+# Project structure and Goals
+
+**Neurosoft-Bioelectronics/auditorydecoding**
+auditorydecoding doesn't provide a generic "any BIDS dataset" pipeline; its NeurosoftPipeline/NeurosoftDataset are Neurosoft-specific (hardcoded to on_vs_off/acoustic_stim trial extraction). 
+What is generic and reusable lives one layer down, in torch_brain itself (a dependency of auditorydecoding):
+  - torch_brain.pipeline.BrainsetPipeline — the manifest/download/process/HDF5-storage skeleton                                               
+  - torch_brain.utils.bids — fetch_ieeg_recordings, build_bids_path, extract_channels, load_participants_tsv, etc. (generic BIDS-iEEG helpers)
+  - torch_brain.data.Data/Interval/IrregularTimeSeries — the HDF5-serializable containers                                                     
+  - torch_brain.datasets.Dataset + MultiChannelDatasetMixin — the runtime loader  
+
+
+# Transform omi-eeg and neurosoft_nsb-epigrid-v1  to hdf5 files
+
+```bash
+export UV_CACHE_DIR=/capstor/scratch/cscs/davalos/.cache/uv.
+
+  uv run --frozen brainsets prepare --local pipelines/omni_ieeg --use-active-env \
+      --raw-dir /capstor/scratch/cscs/davalos/data/raw_dir \
+      --processed-dir /capstor/scratch/cscs/davalos/data/processed
+
+  uv run --frozen brainsets prepare --local pipelines/neurosoft_nsb-epigrid-v1 --use-active-env \
+      --raw-dir /capstor/scratch/cscs/davalos/data/raw_dir \
+      --processed-dir /capstor/scratch/cscs/davalos/data/processed
+```
+  - the pipeline skips any .h5 that already exists unless --reprocess is passed. 
+  - this will process all 464 discovered recordings from the 27GB raw dataset
+  - each .h5 stores the signal as float64, so e.g. that 67MB sleep EDF became a 282MB .h5; expect the
+  full processed set to run well into the multi-GB range
+
+
+# on cluster
+git pull
+uv sync --all-groups
+
+
+
+https://github.com/Neurosoft-Bioelectronics/
+Reproduce results?
+Dont even need it?
+encoder/cnn/which model?
+ routine for loading h5 files? 
+h5 files need to load them, pre written routines that i can borrow
+nwb files instead of hd5 adapted to neurosoft?  they are hd5 files structure as a directory
+
+
+/capstor/scratch/cscs/eymericboyer/data/omni-ieeg/
+
+
+### TODO:
+- write a new OmniIEEGPipeline(BrainsetPipeline) (analogous to NeurosoftPipeline, reusing the generic torch_brain BIDS helpers) that processes Omni-iEEG's raw BIDS+EDF into per-session HDF5 files, 
+- plus an OmniIEEGDataset(MultiChannelDatasetMixin, Dataset) to load them, then a thin Foundry wrapper in foundry/data/datasets/omni_ieeg.py                             
+
+- Understand why not all the scripts are present in the github and i cannot track changes, and add it to the next commit?
+- As there are many packages: foundry and Omni-EEG that each have their uv lock and readme, can i get one global uv lock for the whole project? or should i keep them separate?
+
+**Omni-iEEG**
+Plot the data
+Check the percentage of annotated data
+
+ Summary of what's in place:                                                                           
+                                                                                                                                                    
+  Pipeline (foundry/data/pipelines/omni_ieeg.py + thin CLI entry pipelines/omni_ieeg/pipeline.py)                                                   
+  - Since Omni-iEEG is BIDS-like but missing dataset_description.json/_ieeg.json/events.tsv, it discovers/reads recordings the same way             
+  sample_usage.py's DataFilter does (glob + participants.tsv/*_channels.tsv), not via mne_bids.                                                     
+  - One HDF5 recording per EDF file (matches the granularity of the dataset's own final_split.csv), with channel-level soz/resection/anatomical/good
+  labels merged onto MNE's channel list, plus patient-level outcome/dataset_name/task_name/official split.                                          
+  - No task-specific target extraction baked in — labels are exposed as plain attributes for a future Foundry target extractor.                     
+  - Symlinked data/raw_dir/omni_ieeg -> Omni-iEEG_dataset so the pipeline's brainset_id resolves correctly.                                         
+                                                                                                                                                    
+  Dataset (foundry/data/datasets/omni_ieeg.py, OmniIEEGDataset) — registered in foundry/data/datasets/__init__.py.                                  
+                                                                                                                                                    
+  Caught and fixed while smoke-testing on 3 recordings across different centers (Multicenter, openieeg, hup): the anatomical channel field isn't a  
+  numeric code like soz/resection — it's a region name string (e.g. "fusiform") or "-1" when unknown, so I fixed the pipeline to store it as a      
+  string field instead of crashing on int(). Also confirmed hup recordings can have bipolar-derivation channel names (e.g. "F3-F4") that don't match
+  channels.tsv — handled gracefully with a warning, not a crash.                                                                                    
+                                                                                                                                                    
+  Data quirk worth knowing: your local data/raw_dir is a partial snapshot — participants.tsv references 328 patients but only 201 have folders on   
+  disk (464 EDFs discovered), and final_split.csv has 1026 rows vs 482 EDFs on disk. Not a bug in the pipeline, just incomplete local download.     
+                                                                                                                                                    
+  Notebook (notebooks/omni_ieeg_overview.ipynb) — dataset composition, and per your request, annotation coverage as percentages (e.g. 14.9% of      
+  patients have raw event annotations, 87.8% have SOZ labels), the official split, and a signal plot for one SOZ channel.                           
+                                                                                                                                                    
+  Processed 3 demo recordings into data/processed/omni_ieeg/ (~480MB) so the notebook runs out of the box. Running the full pipeline over all ~464  
+  recordings (27GB raw) would take a long time — that's a separate command for you to run when ready:                                               
+  uv run brainsets prepare --local pipelines/omni_ieeg --use-active-env --raw data/raw_dir --processed-dir data/processed                           
+                                                                                                                                                    
+  Not done yet: nsb-epigrid-v1 has no Foundry dataset/pipeline — that's a separate task per your README notes.                                      
+                                                            
+
+
+
+
+
+ I want to load with the foundry structure (check foundry repository, and subfolder datasets), the dataset:
+- neurosoft_epilepsy/data/raw_dir/nsb-epigrid-v1
+helper functions might be found here: /Users/avalos/Documents/Programming/neurosoft_epilepsy/foundry/data/datasets/neurosoft.py 
+
+I want to create a notebook in notebooks which load both datasets and plot one example data for each (1 patient 1 channel for instance).
+I want to base this notebook on the example here: neurosoft_epilepsy/auditorydecoding/notebooks/raw_data_visualization.ipynb
+
+The key pair (e.g. ~/.ssh/cscs-key) — generated once, and does not need to be run every time your signed key expires.
+The signed certificate — this is what's short-lived. By default, keys (certificates) are valid for 1 day, and you need to generate or sign a new one when needed for continued access.
+To sign an existing public key: `cscs-key sign`
+
+davalos@clariden-ln004:/capstor/scratch/cscs/eymericboyer/data/nsb-epigrid-v1> cd sub-01
+bash: cd: sub-01: Permission denied >> TODO ask why
+
+
+/Users/avalos/Documents/Programming/neurosoft_epilepsy/
+
 # Foundry
 
 Foundry is a modular brain data experimentation framework designed for flexible neuroscience research. It provides composable building blocks (tokenizers, embeddings, backbones, readouts) and keeps the core minimal so you can focus on your experiments instead of glue code.
