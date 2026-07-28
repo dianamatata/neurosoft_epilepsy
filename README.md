@@ -65,7 +65,7 @@ Get the data:
 ```bash
 cp -r /capstor/store/cscs/swissai/a0091/sdsc/nsb-epigrid-v1 /capstor/scratch/cscs/davalos/data/raw_dir/neurosoft_nsb-epigrid-v1
 
-scp -r davalos@clariden-ln002:/capstor/scratch/cscs/davalos/data/processed/omni_ieeg/sub-openieegDetroit051_ses-01_task-sleep.h5 /Users/avalos/Documents/Programming/neurosoft_epilepsy/data/processed/sub-openieegDetroit051_ses-01_task-sleep.h5 
+scp -r clariden:/capstor/scratch/cscs/davalos/data/processed/omni_ieeg/sub-openieegDetroit051_ses-01_task-sleep.h5 /Users/avalos/Documents/Programming/neurosoft_epilepsy/data/processed/sub-openieegDetroit051_ses-01_task-sleep.h5 
 ```
 #no: Mimic the local setup by symlinking the dataset folder ln -s /mydata/aqvpa/shared/audio data
 
@@ -131,11 +131,11 @@ What is generic and reusable lives one layer down, in torch_brain itself (a depe
 export UV_CACHE_DIR=/capstor/scratch/cscs/davalos/.cache/uv.
 
   uv run --frozen brainsets prepare --local pipelines/omni_ieeg --use-active-env \
-      --raw-dir /capstor/scratch/cscs/davalos/data/raw_dir \
+      --raw-dir /capstor/scratch/cscs/davalos/data/raw \
       --processed-dir /capstor/scratch/cscs/davalos/data/processed
 
   uv run --frozen brainsets prepare --local pipelines/neurosoft_nsb-epigrid-v1 --use-active-env \
-      --raw-dir /capstor/scratch/cscs/davalos/data/raw_dir \
+      --raw-dir /capstor/scratch/cscs/davalos/data/raw \
       --processed-dir /capstor/scratch/cscs/davalos/data/processed
 ```
   - the pipeline skips any .h5 that already exists unless --reprocess is passed. 
