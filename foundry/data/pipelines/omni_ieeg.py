@@ -67,8 +67,6 @@ class OmniIEEGPipeline(BrainsetPipeline):
     brainset_id: str = "omni_ieeg"
     modality = "ieeg"
 
-    #: Line noise frequency to notch-filter out, matching the upstream
-    #: ``omni_ieeg.utils.utils_edf.read_raw`` preprocessing.
     notch_freq: float = 60.0
 
     @classmethod
