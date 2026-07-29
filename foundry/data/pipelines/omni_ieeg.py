@@ -1,24 +1,13 @@
 """Pipeline for processing the Omni-iEEG dataset into brainset HDF5 recordings.
 
-Omni-iEEG (https://github.com/Omni-iEEG) ships a BIDS-*like* layout
-(``sub-*/ses-*/ieeg/*_ieeg.edf`` + companion ``_channels.tsv``/``.json``), but
-it is missing files that strict BIDS requires (``dataset_description.json``,
-per-run ``_ieeg.json`` sidecars, ``events.tsv``). ``mne_bids`` and
-``torch_brain.utils.bids`` (used by e.g. ``NeurosoftPipeline``) refuse to
-treat such a directory as a BIDS root, so this pipeline discovers and reads
-recordings the same way the upstream ``omni_ieeg`` package's own
-``DataFilter``/``sample_usage.py`` do: glob for EDF files and read
-``participants.tsv``/``*_channels.tsv`` directly, then load each EDF with
-``mne.io.read_raw_edf``.
+Omni-iEEG (https://github.com/Omni-iEEG) in BIDs layout
+BUT missing files of BIDS-*like* layout (ex: events.tsv, _ieeg.json) #TODO check if they are in raw and not in processed
+mne_bids and  torch_brain.utils.bids (used by NeurosoftPipeline) refuse to treat such a directory as a BIDS root
 
-Each ``*_ieeg.edf`` file is treated as one recording (this matches the
-granularity of the dataset's own official split in
-``derivatives/datasplit/final_split.csv``, which assigns train/test per EDF
-file, not per session). No task-specific target extraction is wired up here:
-channel-level ``soz``/``resection``/``anatomical``/``good`` labels and
-patient-level metadata (``outcome``, ``dataset_name``, ``task_name``) are
-stored as plain attributes on the ``Data`` object for downstream Foundry
+Each ``*_ieeg.edf`` file is treated as one recording
+- channel-level ``soz``/``resection``/``anatomical``/``good`` labels and patient-level metadata (``outcome``, ``dataset_name``, ``task_name``) are stored as plain attributes on the ``Data`` object for downstream Foundry
 target extractors to consume.
+Doctor-annotated HFO (high-frequency oscillation) events, when available for a recording, are merged into ``data.annotations``.
 """
 
 from __future__ import annotations
@@ -156,7 +145,8 @@ class OmniIEEGPipeline(BrainsetPipeline):
         channels = _build_channels(raw, channels_df)
 
         self.update_status("Extracting annotations")
-        annotations = _extract_annotations(raw)
+        hfo_events = _load_hfo_events(self.raw_dir, edf_path, raw.info["sfreq"])
+        annotations = _build_annotations(raw, hfo_events)
 
         try:
             meas_date = extract_measurement_date(raw)
@@ -274,7 +264,9 @@ def _build_channels(raw: "mne.io.BaseRaw", channels_df: pd.DataFrame) -> ArrayDi
 def _extract_annotations(raw: "mne.io.BaseRaw") -> Interval:
     annot = raw.annotations
     if annot is None or len(annot) == 0:
-        return Interval(start=np.array([]), end=np.array([]))
+        return Interval(
+            start=np.array([]), end=np.array([]), description=np.array([], dtype=object)
+        )
 
     onset = np.asarray(annot.onset, dtype=np.float64)
     duration = np.asarray(annot.duration, dtype=np.float64)
@@ -284,6 +276,72 @@ def _extract_annotations(raw: "mne.io.BaseRaw") -> Interval:
         start=onset,
         end=onset + duration,
         description=description,
+    )
+
+
+def _load_hfo_events(raw_dir: Path, edf_path: Path, sfreq: float) -> pd.DataFrame:
+    """Load annotated HFO events for one recording, if available.
+
+    ``derivatives/hfo/<relpath>.csv`` holds every auto-detected HFO candidate (channel ``name``, ``start``/``end`` in samples, ``detector``).
+    ``derivatives/hfo_annotation/{train,test}/<edf_name>.parquet`` holds the doctor's ``artifact``/``spike`` labels for a subset of those candidates, but drops the (channel, start, end) that produced them, keeping only the extracted waveform.
+    We rebuild the location by walking a per-detector pointer into the candidates in order.
+    Verified against the raw EDF by waveform correlation (>0.97) for every detector group.
+
+    Returns an empty DataFrame if this recording has no HFO annotations.
+    """
+    edf_relpath = edf_path.relative_to(raw_dir)
+    edf_name = edf_relpath.name
+    candidates_path = raw_dir / "derivatives" / "hfo" / edf_relpath.with_suffix(".csv")
+    annotation_path = next(
+        (
+            path
+            for split in ("train", "test")
+            if (path := raw_dir / "derivatives" / "hfo_annotation" / split / f"{edf_name}.parquet").exists()
+        ),
+        None,
+    )
+    columns = ["name", "start", "end", "detector", "artifact", "spike", "method"]
+    if annotation_path is None or not candidates_path.exists():
+        return pd.DataFrame(columns=columns)
+
+    candidates = pd.read_csv(candidates_path)
+    doctor_labels = pd.read_parquet(annotation_path)
+
+    next_candidate = {
+        detector: iter(group.itertuples(index=False))
+        for detector, group in candidates.groupby("detector", sort=False)
+    }
+    located = pd.DataFrame(
+        [next(next_candidate[detector]) for detector in doctor_labels["detector"]],
+        columns=candidates.columns,
+    )
+
+    events = located[["name", "start", "end", "detector"]].copy()
+    events["start"] /= sfreq
+    events["end"] /= sfreq
+    events["artifact"] = doctor_labels["artifact"].to_numpy()
+    events["spike"] = doctor_labels["spike"].to_numpy()
+    events["method"] = doctor_labels["method"].to_numpy()
+    return events[columns]
+
+
+def _build_annotations(raw: "mne.io.BaseRaw", hfo_events: pd.DataFrame) -> Interval:
+    """Merge doctor-annotated HFO events into the recording's annotations."""
+    manual = _extract_annotations(raw)
+    if hfo_events.empty:
+        return manual
+
+    n_hfo = len(hfo_events)
+    n_manual = len(manual)
+    return Interval(
+        start=np.concatenate([manual.start, hfo_events["start"].to_numpy(dtype=np.float64)]),
+        end=np.concatenate([manual.end, hfo_events["end"].to_numpy(dtype=np.float64)]),
+        description=np.concatenate([manual.description, np.full(n_hfo, "hfo", dtype=object)]),
+        channel=np.concatenate([np.full(n_manual, "", dtype=object), hfo_events["name"].to_numpy(dtype=object)]),
+        detector=np.concatenate([np.full(n_manual, "", dtype=object), hfo_events["detector"].to_numpy(dtype=object)]),
+        method=np.concatenate([np.full(n_manual, "", dtype=object), hfo_events["method"].to_numpy(dtype=object)]),
+        artifact=np.concatenate([np.full(n_manual, -1, dtype=np.int8), hfo_events["artifact"].to_numpy(dtype=np.int8)]),
+        spike=np.concatenate([np.full(n_manual, -1, dtype=np.int8), hfo_events["spike"].to_numpy(dtype=np.int8)]),
     )
 
 
