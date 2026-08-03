@@ -87,12 +87,16 @@ class NeurosoftDataset(MultiChannelDatasetMixin, Dataset):
                 )
 
             if st == "intrasession-block":
-                intervals = self._get_intrasession_block_intervals(split, fold_num_resolved)
+                intervals = self._get_intrasession_block_intervals(
+                    split, fold_num_resolved
+                )
             elif self.split_type in ("intersubject", "intersession"):
-                intervals = self._get_intersubject_or_intersession_intervals(split, fold_num_resolved)
+                intervals = self._get_intersubject_or_intersession_intervals(
+                    split, fold_num_resolved
+                )
             else:
                 raise ValueError(f"Unknown split_type '{self.split_type}'.")
-            
+
         return intervals
 
     def _get_intrasession_block_intervals(
@@ -203,25 +207,24 @@ class NeurosoftDataset(MultiChannelDatasetMixin, Dataset):
             ]
         else:
             raise ValueError(f"Invalid task_type '{self.task_type}'.")
-        
 
     def set_sampling_intervals(
         self,
         intervals: dict,
         split: Optional[Literal["train", "valid", "test"]] = None,
-        ):
+    ):
 
         if split is None:
             for rid, interval in intervals.items():
                 # TODO: Check if this has a proper setter
                 self.get_recording(rid)._domain = interval
             return
-        
+
         if split not in self.valid_splits:
             raise ValueError(
                 "split must be ['train', 'valid', 'test], or None."
             )
-        
+
         if split not in self.valid_splits:
             raise ValueError(
                 "split must be ['train', 'valid', 'test'], or None."
@@ -247,10 +250,12 @@ class NeurosoftDataset(MultiChannelDatasetMixin, Dataset):
             if st == "intrasession-block":
                 self._set_intrasession_block_intervals(intervals, split)
             elif self.split_type in ("intersubject", "intersession"):
-                self._set_intersubject_or_intersession_intervals(intervals, split)
+                self._set_intersubject_or_intersession_intervals(
+                    intervals, split
+                )
             else:
                 raise ValueError(f"Unknown split_type '{self.split_type}'.")
-            
+
     def _set_intrasession_block_intervals(
         self, intervals: dict, split: Literal["train", "valid", "test"]
     ) -> dict:
@@ -275,7 +280,6 @@ class NeurosoftDataset(MultiChannelDatasetMixin, Dataset):
         for rid, interval in intervals.items():
             self.get_recording(rid).set_nested_attribute(key, interval)
 
-
     def _set_intersubject_or_intersession_intervals(
         self, intervals: dict, split: Literal["train", "valid", "test"]
     ) -> dict:
@@ -298,6 +302,7 @@ class NeurosoftDataset(MultiChannelDatasetMixin, Dataset):
                     data.acoustic_stim_trials
                 else:
                     raise ValueError(f"Invalid task_type '{self.task_type}'.")
+
 
 class NeurosoftMinipigs2026(NeurosoftDataset):
     def __init__(self, **kwargs):

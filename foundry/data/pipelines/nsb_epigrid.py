@@ -49,7 +49,9 @@ def _load_recordings_tolerant(raw_dir, recording_ids, modality):
             if "rest" not in np.unique(raw.annotations.description):
                 _nsp._add_rest_annotations(raw)
 
-        timestamp = _nsp.load_json_sidecar(bids_path).get("OriginalRecordingTimestamp")
+        timestamp = _nsp.load_json_sidecar(bids_path).get(
+            "OriginalRecordingTimestamp"
+        )
         if timestamp is None:
             warnings.warn(
                 f"{recording_id}: sidecar has no OriginalRecordingTimestamp, "

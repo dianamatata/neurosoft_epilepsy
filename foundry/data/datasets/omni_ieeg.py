@@ -46,7 +46,9 @@ class OmniIEEGDataset(MultiChannelDatasetMixin, Dataset):
         Recordings absent from that file are assigned ``"unassigned"``.
         """
         if split not in VALID_SPLITS:
-            raise ValueError(f"split must be one of {VALID_SPLITS}, got {split!r}.")
+            raise ValueError(
+                f"split must be one of {VALID_SPLITS}, got {split!r}."
+            )
         return [
             rid
             for rid in self.recording_ids

@@ -30,7 +30,9 @@ class NsbEpigridV1(NeurosoftDataset):
     """Foundry dataset for the Neurosoft nsb-epigrid-v1 human iEEG cohort."""
 
     def __init__(self, *, fold=0, **kwargs):
-        super().__init__(dirname="neurosoft_nsb-epigrid-v1", fold_num=fold, **kwargs)
+        super().__init__(
+            dirname="neurosoft_nsb-epigrid-v1", fold_num=fold, **kwargs
+        )
 
     def get_recording_hook(self, data: Data):
         super(NeurosoftDataset, self).get_recording_hook(data)
