@@ -195,30 +195,67 @@ One layer down, in `torch_brain` itself (a dependency of `auditorydecoding`), we
 ```bash
 export UV_CACHE_DIR=/capstor/scratch/cscs/davalos/.cache/uv
 
-uv run --frozen brainsets prepare -v --local pipelines/omni_ieeg --use-active-env \
-    --raw-dir /capstor/scratch/cscs/davalos/data/raw \
-    --processed-dir /capstor/scratch/cscs/davalos/data/processed
-    
-# if it does not work    
-RAY_RUNTIME_ENV_IGNORE_GITIGNORE=1 uv run --frozen brainsets prepare -v --local pipelines/omni_ieeg --use-active-env \
+RAY_ENABLE_UV_RUN_RUNTIME_ENV=0 uv run --frozen brainsets prepare -v --local pipelines/omni_ieeg --use-active-env \
     --raw-dir /capstor/scratch/cscs/davalos/data/raw \
     --processed-dir /capstor/scratch/cscs/davalos/data/processed
 ```
 
-- The pipeline skips any `.h5` that already exists unless `--reprocess` is passed.
-- This processes all 464 discovered recordings from the 27GB raw dataset.
+**Why `RAY_ENABLE_UV_RUN_RUNTIME_ENV=0` is required:** since the driver is launched via `uv run --frozen`, Ray auto-detects this and tries to replicate the exact `uv run` environment on every worker — packaging up the working directory and re-running `uv sync --frozen` + `uv run` inside an isolated copy per worker (`ray._private.worker._maybe_modify_runtime_env`). That's unnecessary here (`--use-active-env` already means "just use the environment I'm standing in") and actively broken: the packaged copy excludes `.venv` (Ray's own default exclude) and `uv.lock` (listed in `.gitignore`, so excluded by Ray's `.gitignore`-aware packaging), so the re-provisioned `uv run --frozen` has neither an environment nor a lockfile and every worker crashes on startup. Setting `RAY_ENABLE_UV_RUN_RUNTIME_ENV=0` disables this auto-replication so workers just inherit the driver's already-active interpreter directly.
+
+- The pipeline skips any `.h5` that already exists unless `--reprocess` is passed — but note `--reprocess` isn't actually wired up as a CLI flag for this pipeline (it doesn't define a custom argparse `parser` exposing it), so to force a clean rerun of specific recordings, delete their `.h5` files instead.
+- This processes all 594 discovered recordings from the raw dataset.
 - Each `.h5` stores the signal as `float64`, so a 67MB sleep EDF becomes a ~282MB `.h5`.
 
+### If some recordings show `FAILED`
 
-## Transforming Omni-iEEG and neurosoft_nsb-epigrid-v1 to HDF5
+The parallel run only prints `<recording_id>: FAILED` — the real traceback goes to the actor's stderr, which isn't captured anywhere reachable (in local Ray mode it streams to whichever terminal/`srun` step launched it, not to a log file). To get the real error for one failing recording, rerun it directly in-process (no Ray, so exceptions print normally):
 
 ```bash
-# TODO: run in a specific job with allocated ressources? why is it not working?
-RAY_RUNTIME_ENV_IGNORE_GITIGNORE=1 uv run --frozen brainsets prepare -v --local pipelines/neurosoft_nsb-epigrid-v1 --use-active-env \
-    --raw-dir /capstor/scratch/cscs/davalos/data/raw \
-    --processed-dir /capstor/scratch/cscs/davalos/data/processed
+RAY_ENABLE_UV_RUN_RUNTIME_ENV=0 uv run --frozen --active python -m torch_brain.pipeline.runner \
+  pipelines/omni_ieeg/pipeline.py \
+  --raw-dir=/capstor/scratch/cscs/davalos/data/raw \
+  --processed-dir=/capstor/scratch/cscs/davalos/data/processed \
+  --single=<recording_id>
 ```
 
+**Watch out:** a crash during `process()` happens *after* `h5py.File(store_path, "w")` has already created the file and after most groups have been written — so a failed recording can leave a large, corrupt-but-existing `.h5` behind (multi-GB partial files, in practice). Since the "already processed" check only tests file *existence*, delete these before rerunning or they'll be silently skipped as done:
+
+```bash
+rm /capstor/scratch/cscs/davalos/data/processed/omni_ieeg/<recording_id>.h5
+# then rerun the normal brainsets prepare command — it skips everything else and only reprocesses the missing ones
+```
+
+Two real bugs were found and fixed this way (both were `TypeError: Object dtype dtype('O') has no native HDF5 equivalent` from `torch_brain`'s `Interval.to_hdf5`, which only knows how to serialize unicode (`'U'`) string arrays, not raw Python-object (`'O'`) arrays):
+- `foundry/data/pipelines/omni_ieeg.py`'s `_extract_annotations` defaulted the `description` field to an object-dtype array for recordings with zero embedded MNE annotations — fixed with an explicit `dtype=str`.
+- `auditorydecoding/data/neurosoft_pipeline.py`'s `extract_*_trials` functions built `recording_id` arrays with `dtype=object` — same fix. `auditorydecoding` is a pinned git dependency (see `pyproject.toml`), so the installed `.venv` copy needed patching separately from the local `auditorydecoding/` checkout, and either fix will be wiped by the next `uv sync` unless pushed upstream.
+
+### HFO doctor-annotation / detector-candidate mismatch
+
+`_load_hfo_events` in `foundry/data/pipelines/omni_ieeg.py` merges auto-detected HFO candidates (`derivatives/hfo/<recording>.csv`) with doctor-annotated labels (`derivatives/hfo_annotation/{train,test}/<recording>.parquet`) by walking a per-detector pointer into the candidates, in the same order the doctor labels appear — assuming there are always at least as many candidates as doctor-labeled rows per detector. That assumption is violated for a handful of recordings (found for Zurich's `ste` detector and a couple of Detroit `mni` rows), which previously crashed with `StopIteration`. `scripts/audit_hfo_detector_shortage.py` audits every recording's candidate-vs-doctor-label counts per detector and writes `scripts/hfo_detector_shortage_report.csv` — run it after any raw-data changes to check the assumption still holds:
+
+```bash
+RAY_ENABLE_UV_RUN_RUNTIME_ENV=0 uv run --frozen --active python scripts/audit_hfo_detector_shortage.py
+```
+
+The fix in `_load_hfo_events` keeps only as many doctor-labeled rows per detector as there are candidates available (dropping the unresolvable tail), rather than hardcoding a specific site or detector — this covers today's known shortages and any new ones a future data update might introduce.
+
+**Note:** the HFO-merging feature was added to the pipeline after most of the 594 recordings were already processed, and `process()`'s existence-based skip means those older `.h5` files do **not** include HFO-merged annotations. Delete a recording's `.h5` before rerunning if you need it to reflect the current merging logic.
+
+
+## Transforming neurosoft_nsb-epigrid-v1 to HDF5
+Same `RAY_ENABLE_UV_RUN_RUNTIME_ENV=0` requirement as Omni-iEEG above. Recommendation: for brainsets prepare runs (data download/processing — no GPU needed), grab an interactive compute-node allocation instead of running on the login node:
+```bash
+salloc -A a0091 -p debug -N 1 -c 4 -t 01:00:00 --uenv-passthrough=use # Account A, nodes N, cpus C, time limit t, and take the user environment to the job
+squeue -u davalos # get the jobid_nbr
+srun --jobid=jobid_nbr --overlap bash -c 'RAY_ENABLE_UV_RUN_RUNTIME_ENV=0 uv run --frozen brainsets prepare -v --local pipelines/neurosoft_nsb-epigrid-v1 --use-active-env --raw-dir /capstor/scratch/cscs/davalos/data/raw --processed-dir /capstor/scratch/cscs/davalos/data/processed' 2>&1 | tail -60
+```
+- overlaps: let this step run alongside/overlapping with other steps already using this allocation
+- bash -c '...' with ... the command to be executed
+debug caps at 1h30 (fine for the small 13-item neurosoft manifest); use -p normal -t 12:00:00 for the larger omni_ieeg-scale runs. This dedicates a full node to you, avoids login-node contention, and matches how this repo already does things (configs/hydra/launcher/slurm_cscs.yaml uses the same a0091 account for training jobs).
+kill job when done:
+- If you're still inside the salloc shell: just type exit
+- If you want to cancel it from elsewhere (e.g., another login-node terminal), first find the job ID with squeue -u davalos, then run scancel <jobid>.
+check your current pending jobs: `squeue -u davalos 2>&1`
 ---
 
 ## On the cluster

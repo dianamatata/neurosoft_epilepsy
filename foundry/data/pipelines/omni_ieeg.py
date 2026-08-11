@@ -340,6 +340,16 @@ def _load_hfo_events(
 
     candidates = pd.read_csv(candidates_path)
     doctor_labels = pd.read_parquet(annotation_path)
+    # The candidate pool for a given detector is incomplete for some
+    # recordings (seen for Zurich's "ste" and a few Detroit "mni" rows),
+    # which breaks the ordinal correspondence with the doctor labels past
+    # that point. Keep only as many doctor-labeled rows per detector as
+    # there are candidates available to locate them.
+    cand_counts = candidates["detector"].value_counts()
+    resolvable = doctor_labels.groupby("detector").cumcount() < doctor_labels[
+        "detector"
+    ].map(cand_counts).fillna(0)
+    doctor_labels = doctor_labels[resolvable]
 
     next_candidate = {
         detector: iter(group.itertuples(index=False))
