@@ -98,7 +98,14 @@ ipython_config.py
 #   Similar to Pipfile.lock, it is generally recommended to include uv.lock in version control.
 #   This is especially recommended for binary packages to ensure reproducibility, and is more
 #   commonly ignored for libraries.
-uv.lock
+# uv.lock
+# brainsets prepare runs under Ray. Ray packages a copy of your working directory to hand to each worker process (that's what the working_dir.py:91 warnings about .git/.venv being excluded were telling you).
+  #Each worker is then launched via uv run --frozen ... inside that copied directory.
+
+  #brainsets prepare runs under Ray. Ray packages a copy of your working directory to hand to each worker process (that's what the working_dir.py:91 warnings about .git/.venv being excluded were telling you).
+  #Each worker is then launched via uv run --frozen ... inside that copied directory.
+   # if  uv.lock is listed in .gitignore:101 (not tracked by git), and Ray's working-dir packager by default excludes anything .gitignore matches, on top of .venv also being excluded.
+  # So the copy handed to each worker has no uv.lock and no .venv.
 
 # poetry
 #   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
