@@ -279,9 +279,9 @@ def _extract_annotations(raw: "mne.io.BaseRaw") -> Interval:
     annot = raw.annotations
     if annot is None or len(annot) == 0:
         return Interval(
-            start=np.array([]),
-            end=np.array([]),
-            description=np.array([], dtype=object),
+            start=np.array([], dtype=np.float64),
+            end=np.array([], dtype=np.float64),
+            description=np.array([], dtype=str),
         )
 
     onset = np.asarray(annot.onset, dtype=np.float64)
