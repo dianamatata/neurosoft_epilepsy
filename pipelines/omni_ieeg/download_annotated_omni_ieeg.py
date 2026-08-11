@@ -8,7 +8,7 @@ the rest directly into that same raw dir via the Omni-iEEG HuggingFace downloade
 Run with the Omni-iEEG project's env (has huggingface_hub/tqdm):
     uv run --project Omni-iEEG python scripts/download_annotated_omni_ieeg.py
     uv run --active python3 /capstor/scratch/cscs/davalos/neurosoft_epilepsy/scripts/download_annotated_omni_ieeg.py --dry-run 2>&1 | tail -50
-    uv run /Users/avalos/Documents/Programming/neurosoft_epilepsy/pipelines/omni_ieeg/download_annotated_omni_ieeg.py
+    uv run /Users/avalos/Documents/Programming/neurosoft_epilepsy/pipelines/omni_ieeg/download_annotated_omni_ieeg.py  --dry-run
 """
 import argparse
 import csv

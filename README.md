@@ -67,15 +67,61 @@ uv pip install ipykernel
 ```bash
 git clone https://github.com/Omni-iEEG/Omni-iEEG.git
 cd Omni-iEEG
+# uv pip install -e .
+```
+
+**Known packaging bug in the upstream repo:** `Omni-iEEG/setup.py` uses `setuptools.find_packages()`, which only discovers a package if it has an `__init__.py`. 
+The top-level `omni_ieeg/` package (and `channel_model/`,`exploratory_model/`) ship without one, so `find_packages()` finds nothing, 
+the editable install ends up with an empty package mapping, and `import omni_ieeg` fails with `ModuleNotFoundError` even though `pip install -e .` reported success. (Scripts run from *inside* `Omni-iEEG/`)
+
+
+Fix once per fresh clone, before installing:
+```bash
+touch Omni-iEEG/omni_ieeg/__init__.py \
+      Omni-iEEG/omni_ieeg/channel_model/__init__.py \
+      Omni-iEEG/omni_ieeg/exploratory_model/__init__.py
+```
+Then install (or re-install after the fix):
+```bash
+cd Omni-iEEG
 uv pip install -e .
+```
+Verify:
+```bash
+python -c "from omni_ieeg.dataloader.download_dataset import download_and_extract"
 ```
 
 ### Adding Omni-iEEG dataset
+
+Use the following command to download the dataset from the huggingface dataset. Please note that our full dataset is very large, around 150GB.
 
 ```bash
 python omni_ieeg/dataloader/download_dataset.py \
   --output_dir /Users/avalos/Documents/Programming/neurosoft_epilepsy/data/raw_dir
 ```
+To download only annotated data :
+```bash
+uv run /Users/avalos/Documents/Programming/neurosoft_epilepsy/pipelines/omni_ieeg/download_annotated_omni_ieeg.py
+```
+
+### Verifying the annotated data transfer
+
+An annotated recording needs three things on disk under `data/raw/omni_ieeg` (see `_load_hfo_events` in `foundry/data/pipelines/omni_ieeg.py`): 
+- the raw folder itself,
+- `derivatives/hfo/<...>.csv` (auto-detected HFO candidates)
+- `derivatives/hfo_annotation/{train,test}/<edf_name>.parquet` (doctor labels) 
+
+**1. Which annotated participants are missing entirely** (dry-run of the download script, no download performed):
+```bash
+uv run pipelines/omni_ieeg/download_annotated_omni_ieeg.py --dry-run
+```
+
+**2. Which annotated EDFs are missing their HFO derivatives**:
+```bash
+uv run /Users/avalos/Documents/Programming/neurosoft_epilepsy/pipelines/omni_ieeg/download_annotated_omni_ieeg.py  --dry-run 
+```
+
+`notebooks/omni_ieeg_overview.ipynb` reports the resulting annotation coverage as percentages once the data is in place.
 
 ### Adding Neurosoft nsb-epigrid-v1 dataset
 
@@ -94,7 +140,7 @@ scp -r clariden:/capstor/scratch/cscs/davalos/data/raw/omni_ieeg/derivatives \
   /Users/avalos/Documents/Programming/neurosoft_epilepsy/data/raw/omni_ieeg/derivatives
 ```
 
-> Note: instead of copying, the dataset folder can be symlinked to mimic the local setup, e.g. `ln -s /mydata/aqvpa/shared/audio data`.
+Note: instead of copying, the dataset folder can be symlinked to mimic the local setup, e.g. `ln -s /mydata/aqvpa/shared/audio data`.
 
 ---
 
@@ -228,7 +274,7 @@ The key pair (e.g. ~/.ssh/cscs-key) — generated once, and does not need to be 
 The signed certificate — this is what's short-lived. By default, keys (certificates) are valid for 1 day, and you need to generate or sign a new one when needed for continued access.
 To sign an existing public key: `cscs-key sign`
 
-davalos@clariden-ln004:/capstor/scratch/cscs/eymericboyer/data/nsb-epigrid-v1> cd sub-01
-bash: cd: sub-01: Permission denied >> TODO ask why
+davalos@clariden-ln004:/capstor/scratch/cscs/eymericboyer/data/nsb-epigrid-v1cd sub-01
+bash: cd: sub-01: Permission denied >TODO ask why
 
 
