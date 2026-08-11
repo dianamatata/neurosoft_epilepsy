@@ -597,7 +597,7 @@ def extract_on_vs_off_trials(
         timestamps=(np.array(start_times) + np.array(end_times)) / 2,
         behavior_labels=np.array(labels),
         behavior_ids=np.array(label_ids),
-        recording_id=np.array(recording_ids, dtype=object),
+        recording_id=np.array(recording_ids, dtype=str),
         timekeys=["start", "end", "timestamps"],
     )
 
@@ -648,7 +648,7 @@ def extract_acoustic_stim_trials(
         timestamps=(np.array(start_times) + np.array(end_times)) / 2,
         behavior_labels=np.array(labels),
         behavior_ids=np.array(label_ids),
-        recording_id=np.array(recording_ids, dtype=object),
+        recording_id=np.array(recording_ids, dtype=str),
         timekeys=["start", "end", "timestamps"],
     )
 
