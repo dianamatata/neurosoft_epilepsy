@@ -295,6 +295,26 @@ def _extract_annotations(raw: "mne.io.BaseRaw") -> Interval:
     )
 
 
+def _find_annotation_path(raw_dir: Path, edf_name: str) -> Optional[Path]:
+    """Locate ``derivatives/hfo_annotation/{train,test}/<name>.parquet`` for an EDF.
+
+    The annotation filename usually matches the raw EDF's name exactly, but
+    some sites (seen for UCLA) drop the "openieeg" prefix in the derivatives
+    filename while keeping it in the raw BIDS folder and the ``derivatives/hfo``
+    candidates filename. Try the exact name first, then that stripped variant.
+    """
+    name_variants = [edf_name]
+    if "openieeg" in edf_name:
+        name_variants.append(edf_name.replace("openieeg", "", 1))
+
+    for split in ("train", "test"):
+        for name in name_variants:
+            path = raw_dir / "derivatives" / "hfo_annotation" / split / f"{name}.parquet"
+            if path.exists():
+                return path
+    return None
+
+
 def _load_hfo_events(
     raw_dir: Path, edf_path: Path, sfreq: float
 ) -> pd.DataFrame:
@@ -312,20 +332,7 @@ def _load_hfo_events(
     candidates_path = (
         raw_dir / "derivatives" / "hfo" / edf_relpath.with_suffix(".csv")
     )
-    annotation_path = next(
-        (
-            path
-            for split in ("train", "test")
-            if (
-                path := raw_dir
-                / "derivatives"
-                / "hfo_annotation"
-                / split
-                / f"{edf_name}.parquet"
-            ).exists()
-        ),
-        None,
-    )
+    annotation_path = _find_annotation_path(raw_dir, edf_name)
     columns = [
         "name",
         "start",
@@ -340,11 +347,8 @@ def _load_hfo_events(
 
     candidates = pd.read_csv(candidates_path)
     doctor_labels = pd.read_parquet(annotation_path)
-    # The candidate pool for a given detector is incomplete for some
-    # recordings (seen for Zurich's "ste" and a few Detroit "mni" rows),
-    # which breaks the ordinal correspondence with the doctor labels past
-    # that point. Keep only as many doctor-labeled rows per detector as
-    # there are candidates available to locate them.
+    # The candidate pool for a given detector is incomplete for some recordings (seen for Zurich's "ste" and a few Detroit "mni" rows), which breaks the ordinal correspondence with the doctor labels past that point. 
+    # Keep only as many doctor-labeled rows per detector as there are candidates available to locate them.
     cand_counts = candidates["detector"].value_counts()
     resolvable = doctor_labels.groupby("detector").cumcount() < doctor_labels[
         "detector"
