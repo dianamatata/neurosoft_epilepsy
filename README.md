@@ -132,8 +132,8 @@ cp -r /capstor/store/cscs/swissai/a0091/sdsc/nsb-epigrid-v1 \
 ### Copying data
 
 ```bash
-scp -r clariden:/capstor/scratch/cscs/davalos/data/processed/omni_ieeg/sub-openieegDetroit006_ses-01_task-sleep.h5 \
-  /Users/avalos/Documents/Programming/neurosoft_epilepsy/data/processed/omni_ieeg/sub-openieegDetroit006_ses-01_task-sleep.h5
+scp -r clariden:/capstor/scratch/cscs/davalos/data/processed/omni_ieeg/ \
+  /Users/avalos/Documents/Programming/neurosoft_epilepsy/data/processed/omni_ieeg/
 
 scp -r clariden:/capstor/scratch/cscs/davalos/data/raw/omni_ieeg/derivatives \
   /Users/avalos/Documents/Programming/neurosoft_epilepsy/data/raw/omni_ieeg/derivatives
