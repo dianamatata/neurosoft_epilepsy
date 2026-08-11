@@ -83,8 +83,7 @@ touch Omni-iEEG/omni_ieeg/__init__.py \
 ```
 Then install (or re-install after the fix):
 ```bash
-cd Omni-iEEG
-uv pip install -e .
+uv pip install -e ./Omni-iEEG
 ```
 Verify:
 ```bash
@@ -199,6 +198,11 @@ export UV_CACHE_DIR=/capstor/scratch/cscs/davalos/.cache/uv
 uv run --frozen brainsets prepare -v --local pipelines/omni_ieeg --use-active-env \
     --raw-dir /capstor/scratch/cscs/davalos/data/raw \
     --processed-dir /capstor/scratch/cscs/davalos/data/processed
+    
+# if it does not work    
+RAY_RUNTIME_ENV_IGNORE_GITIGNORE=1 uv run --frozen brainsets prepare -v --local pipelines/omni_ieeg --use-active-env \
+    --raw-dir /capstor/scratch/cscs/davalos/data/raw \
+    --processed-dir /capstor/scratch/cscs/davalos/data/processed
 ```
 
 - The pipeline skips any `.h5` that already exists unless `--reprocess` is passed.
@@ -210,7 +214,7 @@ uv run --frozen brainsets prepare -v --local pipelines/omni_ieeg --use-active-en
 
 ```bash
 # TODO: run in a specific job with allocated ressources? why is it not working?
-uv run --frozen brainsets prepare -v --local pipelines/neurosoft_nsb-epigrid-v1 --use-active-env \
+RAY_RUNTIME_ENV_IGNORE_GITIGNORE=1 uv run --frozen brainsets prepare -v --local pipelines/neurosoft_nsb-epigrid-v1 --use-active-env \
     --raw-dir /capstor/scratch/cscs/davalos/data/raw \
     --processed-dir /capstor/scratch/cscs/davalos/data/processed
 ```
