@@ -10,23 +10,29 @@ Usage:
         --raw-dir /capstor/scratch/cscs/davalos/data/raw/omni_ieeg
 """
 import argparse
+import sys
 from pathlib import Path
 
 import pandas as pd
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from foundry.data.pipelines.omni_ieeg import _find_annotation_path  # noqa: E402
 
 DEFAULT_RAW_DIR = Path("/capstor/scratch/cscs/davalos/data/raw/omni_ieeg")
 
 
 def find_recordings(raw_dir: Path):
+    # Reuses the pipeline's own annotation-lookup helper (rather than
+    # reimplementing exact-name matching here) so this audit can't silently
+    # drift out of sync with what the pipeline actually finds -- an earlier
+    # version of this script hardcoded exact-name matching and, as a result,
+    # missed the ~19 UCLA recordings whose annotation parquet drops the
+    # "openieeg" prefix (see `_find_annotation_path`'s docstring).
     for csv_path in sorted((raw_dir / "derivatives" / "hfo").rglob("*.csv")):
         edf_name = csv_path.with_suffix(".edf").name
-        for split in ("train", "test"):
-            parquet_path = (
-                raw_dir / "derivatives" / "hfo_annotation" / split / f"{edf_name}.parquet"
-            )
-            if parquet_path.exists():
-                yield csv_path, parquet_path
-                break
+        annotation_path = _find_annotation_path(raw_dir, edf_name)
+        if annotation_path is not None:
+            yield csv_path, annotation_path
 
 
 def main() -> None:
