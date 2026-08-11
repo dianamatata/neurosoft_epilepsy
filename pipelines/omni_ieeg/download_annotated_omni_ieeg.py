@@ -14,11 +14,11 @@ import argparse
 import csv
 import sys
 from pathlib import Path
+from omni_ieeg.dataloader.download_dataset import download_and_extract
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "Omni-iEEG"))
 
-from omni_ieeg.dataloader.download_dataset import download_and_extract  # noqa: E402
 
 DEFAULT_RAW_DIR = Path("/capstor/scratch/cscs/davalos/data/raw/omni_ieeg")
 DEFAULT_RAW_DIR = Path("/Users/avalos/Documents/Programming/neurosoft_epilepsy/data/raw/omni_ieeg")
