@@ -200,9 +200,15 @@ RAY_ENABLE_UV_RUN_RUNTIME_ENV=0 uv run --frozen brainsets prepare -v --local pip
     --processed-dir /capstor/scratch/cscs/davalos/data/processed
 ```
 
-**Why `RAY_ENABLE_UV_RUN_RUNTIME_ENV=0` is required:** since the driver is launched via `uv run --frozen`, Ray auto-detects this and tries to replicate the exact `uv run` environment on every worker — packaging up the working directory and re-running `uv sync --frozen` + `uv run` inside an isolated copy per worker (`ray._private.worker._maybe_modify_runtime_env`). That's unnecessary here (`--use-active-env` already means "just use the environment I'm standing in") and actively broken: the packaged copy excludes `.venv` (Ray's own default exclude) and `uv.lock` (listed in `.gitignore`, so excluded by Ray's `.gitignore`-aware packaging), so the re-provisioned `uv run --frozen` has neither an environment nor a lockfile and every worker crashes on startup. Setting `RAY_ENABLE_UV_RUN_RUNTIME_ENV=0` disables this auto-replication so workers just inherit the driver's already-active interpreter directly.
+**Why `RAY_ENABLE_UV_RUN_RUNTIME_ENV=0` is required:** 
+since the driver is launched via `uv run --frozen`, Ray auto-detects this and tries to replicate the exact `uv run` environment on every worker, packaging up the working directory and re-running `uv sync --frozen` + `uv run` inside an isolated copy per worker (time intensive)
+That's unnecessary here (`--use-active-env` already means "just use the environment I'm standing in") and actively broken: the packaged copy excludes `.venv` (Ray's own hardcoded default), so the re-provisioned `uv run --frozen` has neither an environment nor a lockfile and every worker crashes on startup. 
+- .venv is excluded by Ray, So each worker would still do a full uv sync --frozen from scratch into a fresh venv: very slow
+- Not excluding .venv (RAY_OVERRIDE_RUNTIME_ENV_DEFAULT_EXCLUDES='') means packaging and copying your multi-GB .venv (torch, ray, mne, ...) for every worker startup: very slow
+- Dropping --frozen avoids the immediate crash but lets uv freely re-resolve dependencies per worker, risking a different resolved version than what the driver is actually running
+Setting `RAY_ENABLE_UV_RUN_RUNTIME_ENV=0` disables this auto-replication so workers just inherit the driver's already-active interpreter directly.
 
-- The pipeline skips any `.h5` that already exists unless `--reprocess` is passed — but note `--reprocess` isn't actually wired up as a CLI flag for this pipeline (it doesn't define a custom argparse `parser` exposing it), so to force a clean rerun of specific recordings, delete their `.h5` files instead.
+- The pipeline skips any `.h5` that already exists unless `--reprocess` is passed but there is a possibility that corrupted h5 are created, and need to cleane these before rerunning. 
 - This processes all 594 discovered recordings from the raw dataset.
 - Each `.h5` stores the signal as `float64`, so a 67MB sleep EDF becomes a ~282MB `.h5`.
 
@@ -218,7 +224,14 @@ RAY_ENABLE_UV_RUN_RUNTIME_ENV=0 uv run --frozen --active python -m torch_brain.p
   --single=<recording_id>
 ```
 
-**Watch out:** a crash during `process()` happens *after* `h5py.File(store_path, "w")` has already created the file and after most groups have been written — so a failed recording can leave a large, corrupt-but-existing `.h5` behind (multi-GB partial files, in practice). Since the "already processed" check only tests file *existence*, delete these before rerunning or they'll be silently skipped as done:
+**Watch out:** a crash during `process()` happens *after* `h5py.File(store_path, "w")` has already created the file and after most groups have been written — so a failed recording can leave a large, corrupt-but-existing `.h5` behind (multi-GB partial files, in practice). Since the "already processed" check only tests file *existence*, delete these before rerunning or they'll be silently skipped as done.
+
+`scripts/find_corrupt_h5.py` scans a processed directory, opens every `.h5`, and flags anything unreadable/truncated or missing top-level groups that every other file in the directory has (a majority-vote reference schema. no pipeline-specific knowledge hardcoded, so it works for any brainset's output). Read-only and lightweight enough to run on the login node:
+
+```bash
+uv run --frozen --active python scripts/find_corrupt_h5.py /capstor/scratch/cscs/davalos/data/processed/omni_ieeg
+# add --delete to remove the broken files it finds
+```
 
 ```bash
 rm /capstor/scratch/cscs/davalos/data/processed/omni_ieeg/<recording_id>.h5
