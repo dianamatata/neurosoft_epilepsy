@@ -30,6 +30,22 @@ git clone --branch feat/omni-ieeg_integration --single-branch https://github.com
 cd neurosoft_epilepsy
 ```
 
+2 - Eymeric's code
+```sh
+cd /capstor/scratch/cscs/davalos
+git clone --branch feat/omni-ieeg_integration --single-branch https://github.com/dianamatata/neurosoft_epilepsy
+
+git clone --branch diana_v1  --single-branch  https://github.com/Neurosoft-Bioelectronics/epilepsy
+
+```
+
+PyHFO code
+
+```sh
+cd /capstor/scratch/cscs/davalos
+git clone https://github.com/roychowdhuryresearch/pyHFO.git
+```
+
 **2. Start a uenv with a view**
 
 ```sh
@@ -310,25 +326,3 @@ Caught and fixed while smoke-testing on 3 recordings across different centers (M
 **Notebook** (`notebooks/omni_ieeg_overview.ipynb`) — dataset composition and annotation coverage as percentages (e.g. 14.9% of patients have raw event annotations, 87.8% have SOZ labels), the official split, and a signal plot for one SOZ channel.
 
 **Processed** 3 demo recordings into `data/processed/omni_ieeg/` (~480MB) so the notebook runs out of the box. Running the full pipeline over all ~464 recordings (27GB raw) takes a long time — run separately when ready:
-
-**Not done yet:** `nsb-epigrid-v1` has no Foundry dataset/pipeline — a separate task per the TODO notes above.                                                        
-
-
-
-
-
- I want to load with the foundry structure (check foundry repository, and subfolder datasets), the dataset:
-- neurosoft_epilepsy/data/raw_dir/nsb-epigrid-v1
-helper functions might be found here: /Users/avalos/Documents/Programming/neurosoft_epilepsy/foundry/data/datasets/neurosoft.py 
-
-I want to create a notebook in notebooks which load both datasets and plot one example data for each (1 patient 1 channel for instance).
-I want to base this notebook on the example here: neurosoft_epilepsy/auditorydecoding/notebooks/raw_data_visualization.ipynb
-
-The key pair (e.g. ~/.ssh/cscs-key) — generated once, and does not need to be run every time your signed key expires.
-The signed certificate — this is what's short-lived. By default, keys (certificates) are valid for 1 day, and you need to generate or sign a new one when needed for continued access.
-To sign an existing public key: `cscs-key sign`
-
-davalos@clariden-ln004:/capstor/scratch/cscs/eymericboyer/data/nsb-epigrid-v1cd sub-01
-bash: cd: sub-01: Permission denied >TODO ask why
-
-
